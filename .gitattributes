@@ -1,3 +1,4 @@
+*.mps filter=lfs diff=lfs merge=lfs -text
 cpu2006/soplex/ref.mps filter=lfs diff=lfs merge=lfs -text
 cpu2006/hmmer/swiss41 filter=lfs diff=lfs merge=lfs -text
 cpu2006/xalanc/t5.xml filter=lfs diff=lfs merge=lfs -text
