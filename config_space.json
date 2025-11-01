@@ -9,9 +9,9 @@
   
   "cpu": {
     "cpu_type": {
-      "values": ["DerivO3CPU"],
-      "description": "CPU model type (restricted to DerivO3CPU for current sweeps)",
-      "default": "DerivO3CPU"
+      "values": ["X86O3CPU"],
+      "description": "CPU model type (restricted to X86O3CPU for current sweeps)",
+      "default": "X86O3CPU"
     },
     "cpu_clock": {
       "values": ["1GHz", "2GHz", "4GHz", "8GHz"],
@@ -146,7 +146,7 @@
     "small_test": {
       "description": "Quick test configuration - single CPU type per run",
       "overrides": {
-        "cpu.cpu_type": ["DerivO3CPU"],
+        "cpu.cpu_type": ["X86O3CPU"],
         "cpu.cpu_clock": ["2GHz"],
         "memory.mem_size": ["2048MB"]
       }
@@ -154,7 +154,7 @@
     "baseline": {
       "description": "Standard baseline configuration",
       "overrides": {
-        "cpu.cpu_type": ["DerivO3CPU"],
+        "cpu.cpu_type": ["X86O3CPU"],
         "cpu.cpu_clock": ["2GHz"],
         "memory.mem_size": ["4096MB"],
         "cache_l1d.size": ["32kB"],
@@ -165,7 +165,7 @@
     "high_performance": {
       "description": "High-end configuration",
       "overrides": {
-        "cpu.cpu_type": ["DerivO3CPU"],
+        "cpu.cpu_type": ["X86O3CPU"],
         "cpu.cpu_clock": ["8GHz"],
         "memory.mem_size": ["8192MB"],
         "cache_l1d.size": ["64kB"],

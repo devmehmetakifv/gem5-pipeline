@@ -2,7 +2,7 @@
 #
 # IMPORTANT: Path Setup
 # =====================
-# - gem5.installation_path: Points to CLOUD MACHINE gem5 installation
+# - gem5.installation_path: "/home/xenon/gem5Sim/gem5"
 #   (where gem5.opt binary is located: /home/xenon/gem5Sim/gem5)
 #
 # - benchmarks.cpu2006_path: Points to LOCAL cpu2006 directory
@@ -21,11 +21,11 @@ gem5:
   installation_path: "/home/xenon/gem5Sim/gem5"
   
   # Relative path to the gem5 binary (on cloud machine)
-  binary: "build/X86/gem5.opt"
+  binary: "build/ALL/gem5.opt"
   
   # Directory containing simulation configs (on cloud machine)
   # Use standard gem5 configs since tbtk doesn't exist
-  configs_dir: "configs/example"
+  configs_dir: "configs/deprecated/example"
   
   # Default config script to use (standard gem5 SE mode config)
   default_config: "se.py"

@@ -392,14 +392,14 @@ class SimulationRunner:
             working_dir = binary_path.parent
         
         gem5_config = self.configs_dir / self.config['gem5']['default_config']
-        
+
         cmd: List[str] = [
-            str(self.gem5_binary),
-            '-d', str(run_dir),
-            str(gem5_config),
-            '--cmd', str(binary_path),
-            '--cwd', str(working_dir)
+             str(self.gem5_binary),
+             '-d', str(run_dir),
+             str(gem5_config),
+             '--cmd', str(binary_path)
         ]
+
         
         options_value = self._format_option_list(benchmark, settings.get('options'))
         if options_value:

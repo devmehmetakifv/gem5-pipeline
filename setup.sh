@@ -85,14 +85,14 @@ fi
 # Verify gem5
 echo ""
 echo "Verifying gem5 installation..."
-GEM5_BINARY="${GEM5_PATH}/build/X86/gem5.opt"
+GEM5_BINARY="${GEM5_PATH}/build/ALL/gem5.opt"
 
 if [ -f "$GEM5_BINARY" ]; then
     echo -e "${GREEN}✓ Found gem5 binary: $GEM5_BINARY${NC}"
 else
     echo -e "${YELLOW}✗ gem5 binary not found: $GEM5_BINARY${NC}"
     echo "  Please compile gem5 first:"
-    echo "  cd $GEM5_PATH && scons build/X86/gem5.opt -j\$(nproc)"
+    echo "  cd $GEM5_PATH && scons build/ALL/gem5.opt -j\$(nproc)"
 fi
 
 # Verify CPU2006
