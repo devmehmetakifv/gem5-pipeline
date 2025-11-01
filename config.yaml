@@ -25,7 +25,7 @@ gem5:
   
   # Directory containing simulation configs (on cloud machine)
   # Use standard gem5 configs since tbtk doesn't exist
-  configs_dir: "configs/example"
+  configs_dir: "custom_configs"
   
   # Default config script to use (standard gem5 SE mode config)
   default_config: "se.py"

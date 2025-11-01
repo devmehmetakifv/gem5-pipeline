@@ -376,7 +376,7 @@ class SimulationRunner:
         
         return str(options)
     
-    def _build_gem5_command(self, benchmark: str, run_dir: Path) -> Tuple[List[str], Optional[Path]]:
+    def _build_gem5_command(self, benchmark: str, run_dir: Path) -> Tuple[List[str], Optional[Path], Path]:
         """Construct the gem5 command for a benchmark."""
         settings = dict(self.benchmark_commands.get(benchmark, {}))
         
@@ -384,9 +384,15 @@ class SimulationRunner:
         binary_path = self._resolve_benchmark_path(binary_value)
         if not binary_path.exists():
             raise FileNotFoundError(f"Benchmark binary not found for '{benchmark}': {binary_path}")
-        
+
+        working_dir_value = settings.get('working_dir')
+        if working_dir_value:
+            working_dir = self._resolve_benchmark_path(working_dir_value)
+        else:
+            working_dir = binary_path.parent
+
         gem5_config = self.configs_dir / self.config['gem5']['default_config']
-        
+
         cmd: List[str] = [
             str(self.gem5_binary),
             '-d', str(run_dir),
@@ -419,7 +425,7 @@ class SimulationRunner:
             if not stdin_path.exists():
                 raise FileNotFoundError(f"stdin file not found for '{benchmark}': {stdin_path}")
         
-        return cmd, stdin_path
+        return cmd, stdin_path, working_dir
     
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from YAML file."""
@@ -506,7 +512,7 @@ class SimulationRunner:
         
         # Build gem5 command
         try:
-            cmd, stdin_path = self._build_gem5_command(benchmark, run_dir)
+            cmd, stdin_path, working_dir = self._build_gem5_command(benchmark, run_dir)
         except FileNotFoundError as exc:
             logger.error(str(exc))
             return {
@@ -535,6 +541,9 @@ class SimulationRunner:
             if stdin_path:
                 stdin_handle = open(stdin_path, 'rb')
             
+            env = os.environ.copy()
+            env['GEM5_PROCESS_CWD'] = str(working_dir)
+            
             with open(stdout_file, 'w') as stdout, open(stderr_file, 'w') as stderr:
                 process = subprocess.run(
                     cmd,
@@ -542,7 +551,8 @@ class SimulationRunner:
                     stderr=stderr,
                     stdin=stdin_handle,
                     timeout=self.config['simulation']['timeout_seconds'],
-                    cwd=str(self.gem5_root)
+                    cwd=str(self.gem5_root),
+                    env=env
                 )
             
             end_time = datetime.now()
