@@ -10,7 +10,7 @@
   "cpu": {
     "cpu_type": {
       "values": ["X86O3CPU"],
-      "description": "CPU model type (restricted to X86O3CPU for current sweeps)",
+      "description": "CPU model type (restricted to DerivO3CPU for current sweeps)",
       "default": "X86O3CPU"
     },
     "cpu_clock": {
