@@ -186,6 +186,77 @@ class GoogleDriveBackup:
         except HttpError as error:
             logger.error(f"Failed to upload file: {error}")
             raise
+   
+    def update_file(
+        self,
+        file_id: str,
+        file_path: Path,
+        filename: Optional[str] = None
+    ) -> str:
+        """
+        Update an existing file on Google Drive with new contents.
+        
+        Args:
+            file_id: ID of the file to update
+            file_path: Local file path with new content
+            filename: Optional new filename
+        
+        Returns:
+            Updated file ID
+        """
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        try:
+            media = MediaFileUpload(str(file_path), resumable=True)
+            body = {}
+            if filename:
+                body['name'] = filename
+            
+            file = self.service.files().update(
+                fileId=file_id,
+                body=body or None,
+                media_body=media,
+                fields='id,name,size'
+            ).execute()
+            
+            logger.info(
+                f"Updated '{file.get('name')}' "
+                f"({int(file.get('size', 0)) / (1024*1024):.2f} MB) "
+                f"(ID: {file.get('id')})"
+            )
+            return file.get('id')
+        
+        except HttpError as error:
+            logger.error(f"Failed to update file: {error}")
+            raise
+    
+    def upload_or_update_file(
+        self,
+        file_path: Path,
+        folder_id: Optional[str] = None,
+        filename: Optional[str] = None,
+        existing_file_id: Optional[str] = None
+    ) -> str:
+        """
+        Upload a file or update an existing one if file ID is provided.
+        
+        Args:
+            file_path: Local file path
+            folder_id: Destination folder ID
+            filename: Remote filename
+            existing_file_id: Existing file ID to update
+        
+        Returns:
+            File ID of uploaded/updated file
+        """
+        if existing_file_id:
+            try:
+                return self.update_file(existing_file_id, file_path, filename)
+            except Exception:
+                logger.warning("Update failed, attempting fresh upload...")
+        
+        return self.upload_file(file_path, folder_id=folder_id, filename=filename)
     
     def upload_directory(
         self,

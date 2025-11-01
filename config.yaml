@@ -275,7 +275,7 @@ google_drive:
   folder_id: ""  # Leave empty to create in root, or specify folder ID
   
   # Backup frequency
-  backup_frequency: "after_each_benchmark"  # Options: after_each_run, after_each_benchmark, daily, manual
+  backup_frequency: "after_each_config"  # Options: after_each_run, after_each_config, daily, manual
   
   # Compress before upload
   compress_before_upload: true

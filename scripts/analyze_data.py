@@ -13,7 +13,7 @@ def analyze_dataset(csv_file: str = 'results/dataset.csv'):
     
     if not Path(csv_file).exists():
         print(f"❌ Dataset not found: {csv_file}")
-        print("Run simulations first: python simulation_runner.py --sweep")
+        print("Run simulations first: python -m scripts.simulation_runner --sweep")
         return
     
     # Load data

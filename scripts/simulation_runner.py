@@ -26,9 +26,20 @@ from rich.console import Console
 from rich.table import Table
 from rich.logging import RichHandler
 
-from config_manager import ConfigurationManager
-from results_parser import Gem5StatsParser
-from gdrive_backup import GoogleDriveBackup
+if __package__ is None or __package__ == "":
+    import sys as _sys
+
+    project_root = Path(__file__).resolve().parent.parent
+    if str(project_root) not in _sys.path:
+        _sys.path.insert(0, str(project_root))
+
+    from scripts.config_manager import ConfigurationManager  # type: ignore
+    from scripts.results_parser import Gem5StatsParser  # type: ignore
+    from scripts.gdrive_backup import GoogleDriveBackup  # type: ignore
+else:
+    from .config_manager import ConfigurationManager
+    from .results_parser import Gem5StatsParser
+    from .gdrive_backup import GoogleDriveBackup
 
 # Default SPEC CPU2006 style commands (can be overridden in config.yaml)
 DEFAULT_BENCHMARK_COMMANDS: Dict[str, Dict[str, Any]] = {
@@ -192,7 +203,12 @@ class SimulationRunner:
         # Run tracking
         self.run_log_file = self.results_dir / 'run_log.json'
         self.dataset_file = self.results_dir / 'dataset.csv'
+        self.dataset_drive_id_file = self.results_dir / '.dataset_drive_id'
         self.run_log = self._load_run_log()
+        self.session_successful_runs = 0
+        self.session_failed_runs = 0
+        self.dataset_total_rows = self._count_existing_dataset_rows()
+        self.dataset_drive_file_id = self._load_dataset_drive_file_id()
         
         # Validate setup
         self._validate_setup()
@@ -215,6 +231,97 @@ class SimulationRunner:
         else:
             path_obj = path_obj.expanduser().resolve()
         return path_obj
+    
+    def _count_existing_dataset_rows(self) -> int:
+        """Count existing rows in dataset.csv (excluding header)."""
+        if not self.dataset_file.exists():
+            return 0
+        try:
+            with open(self.dataset_file, 'r', newline='') as csvfile:
+                reader = csv.reader(csvfile)
+                # Skip header if present
+                header = next(reader, None)
+                if header is None:
+                    return 0
+                return sum(1 for _ in reader)
+        except Exception as e:
+            logger.warning(f"Unable to count existing dataset rows: {e}")
+            return 0
+    
+    def _load_dataset_drive_file_id(self) -> Optional[str]:
+        """Load stored Google Drive file ID for dataset."""
+        if self.dataset_drive_id_file.exists():
+            try:
+                return self.dataset_drive_id_file.read_text().strip() or None
+            except Exception as e:
+                logger.warning(f"Failed to read dataset drive ID: {e}")
+        return None
+    
+    def _persist_dataset_drive_file_id(self, file_id: str):
+        """Persist Google Drive dataset file ID to disk."""
+        try:
+            self.dataset_drive_id_file.write_text(file_id)
+        except Exception as e:
+            logger.warning(f"Failed to persist dataset drive ID: {e}")
+    
+    def _flatten_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Flatten result dict into a single row of scalar values."""
+        row = {
+            'run_id': result['run_id'],
+            'benchmark': result['benchmark'],
+            'timestamp': result['timestamp'],
+            'duration': result.get('duration')
+        }
+        for key, value in result.get('config', {}).items():
+            row[f'param_{key}'] = value
+        for key, value in result.get('metrics', {}).items():
+            row[f'metric_{key}'] = value
+        return row
+    
+    def _append_to_dataset_row(self, result: Dict[str, Any]):
+        """Append a successful run to dataset.csv."""
+        if not result.get('metrics'):
+            logger.warning(f"No metrics parsed for {result['run_id']}; skipping dataset append.")
+            return
+        
+        row = self._flatten_result(result)
+        df = pd.DataFrame([row])
+        header = not self.dataset_file.exists()
+        try:
+            df.to_csv(self.dataset_file, mode='a', header=header, index=False)
+            self.dataset_total_rows += 1
+            logger.info(f"Appended run #{self.dataset_total_rows} to dataset.csv ({result['run_id']})")
+        except Exception as e:
+            logger.error(f"Failed to append dataset row for {result['run_id']}: {e}")
+    
+    def _handle_success_result(self, result: Dict[str, Any]):
+        """Process bookkeeping for a successful run."""
+        self.session_successful_runs += 1
+        self._append_to_dataset_row(result)
+        self._sync_dataset_to_drive()
+    
+    def _sync_dataset_to_drive(self):
+        """Upload or update dataset.csv on Google Drive."""
+        if not self.gdrive_backup:
+            return
+        
+        if not self.dataset_file.exists():
+            return
+        
+        try:
+            new_file_id = self.gdrive_backup.upload_or_update_file(
+                self.dataset_file,
+                folder_id=self.gdrive_backup.folder_id,
+                filename=self.dataset_file.name,
+                existing_file_id=self.dataset_drive_file_id
+            )
+            if new_file_id:
+                if new_file_id != self.dataset_drive_file_id:
+                    self.dataset_drive_file_id = new_file_id
+                    self._persist_dataset_drive_file_id(new_file_id)
+                logger.info("✓ dataset.csv synced to Google Drive")
+        except Exception as e:
+            logger.error(f"Failed to sync dataset.csv to Google Drive: {e}")
     
     def _load_benchmark_commands(self) -> Dict[str, Dict[str, Any]]:
         """Merge default benchmark command metadata with overrides from config."""
@@ -498,74 +605,60 @@ class SimulationRunner:
             if stdin_handle:
                 stdin_handle.close()
     
-    def run_benchmark_sweep(
+    def _run_configuration_round(
         self,
-        benchmark: str,
-        strategy: str = 'grid',
-        preset: Optional[str] = None,
-        num_samples: Optional[int] = None,
-        parallel: int = 1
+        config: Dict[str, Any],
+        benchmarks: List[str],
+        parallel: int,
+        round_index: int,
+        total_rounds: int
     ) -> List[Dict[str, Any]]:
-        """
-        Run parameter sweep for a single benchmark.
-        
-        Args:
-            benchmark: Benchmark name
-            strategy: Sampling strategy
-            preset: Configuration preset
-            num_samples: Number of samples (for random strategies)
-            parallel: Number of parallel simulations
-            
-        Returns:
-            List of result dictionaries
-        """
+        """Execute a single configuration across all requested benchmarks."""
+        config_id = self.config_manager.get_config_id(config)
         logger.info(f"\n{'='*60}")
-        logger.info(f"Starting sweep for benchmark: {benchmark}")
+        logger.info(f"Starting configuration round {round_index}/{total_rounds}")
+        logger.info(f"Configuration ID: {config_id}")
+        logger.info(f"Total benchmarks this round: {len(benchmarks)}")
         logger.info(f"{'='*60}\n")
         
-        # Generate configurations
-        configurations = list(self.config_manager.generate_configurations(
-            strategy=strategy,
-            preset=preset,
-            num_samples=num_samples
-        ))
-        
-        total_configs = len(configurations)
-        logger.info(f"Generated {total_configs} configurations")
-        
-        results = []
+        results: List[Dict[str, Any]] = []
+        total_benchmarks = len(benchmarks)
         
         if parallel == 1:
-            # Sequential execution
-            for i, config in enumerate(tqdm(configurations, desc=f"Running {benchmark}")):
-                run_id = f"{benchmark}_{self.config_manager.get_config_id(config)}"
+            for index, benchmark in enumerate(benchmarks, start=1):
+                run_id = f"{benchmark}_{config_id}"
                 
-                # Skip if already completed
                 if run_id in self.run_log['completed']:
                     logger.debug(f"Skipping (already completed): {run_id}")
                     continue
                 
+                logger.info(f"[Round {round_index}/{total_rounds}] Starting {benchmark} "
+                            f"({index}/{total_benchmarks}) with {config_id}")
                 result = self.run_single_simulation(benchmark, config, run_id)
                 results.append(result)
                 
-                # Update run log
                 if result['success']:
                     self.run_log['completed'].append(run_id)
+                    self._handle_success_result(result)
                 else:
                     self.run_log['failed'].append(run_id)
+                    self.session_failed_runs += 1
                 self._save_run_log()
-        
+                logger.info(f"[Round {round_index}/{total_rounds}] Finished {run_id} "
+                            f"(success={result['success']})")
         else:
-            # Parallel execution
             with ProcessPoolExecutor(max_workers=parallel) as executor:
-                futures = {}
+                futures: Dict[Any, str] = {}
                 
-                for config in configurations:
-                    run_id = f"{benchmark}_{self.config_manager.get_config_id(config)}"
+                for index, benchmark in enumerate(benchmarks, start=1):
+                    run_id = f"{benchmark}_{config_id}"
                     
                     if run_id in self.run_log['completed']:
+                        logger.debug(f"Skipping (already completed): {run_id}")
                         continue
                     
+                    logger.info(f"[Round {round_index}/{total_rounds}] Queuing {benchmark} "
+                                f"({index}/{total_benchmarks}) with {config_id}")
                     future = executor.submit(
                         self.run_single_simulation,
                         benchmark,
@@ -574,26 +667,39 @@ class SimulationRunner:
                     )
                     futures[future] = run_id
                 
-                # Collect results
-                for future in tqdm(as_completed(futures), total=len(futures), desc=f"Running {benchmark}"):
-                    run_id = futures[future]
-                    try:
-                        result = future.result()
-                        results.append(result)
-                        
-                        if result['success']:
-                            self.run_log['completed'].append(run_id)
-                        else:
+                if futures:
+                    for future in tqdm(
+                        as_completed(futures),
+                        total=len(futures),
+                        desc=f"Config {round_index}/{total_rounds}"
+                    ):
+                        run_id = futures[future]
+                        try:
+                            result = future.result()
+                            results.append(result)
+                            
+                            if result['success']:
+                                self.run_log['completed'].append(run_id)
+                                self._handle_success_result(result)
+                            else:
+                                self.run_log['failed'].append(run_id)
+                                self.session_failed_runs += 1
+                            self._save_run_log()
+                            logger.info(f"[Round {round_index}/{total_rounds}] Finished {run_id} "
+                                        f"(success={result['success']})")
+                        except Exception as e:
+                            logger.error(f"Exception in {run_id}: {e}")
                             self.run_log['failed'].append(run_id)
-                        self._save_run_log()
-                    
-                    except Exception as e:
-                        logger.error(f"Exception in {run_id}: {e}")
-                        self.run_log['failed'].append(run_id)
-                        self._save_run_log()
+                            self.session_failed_runs += 1
+                            self._save_run_log()
+                else:
+                    logger.info("All benchmarks already completed for this configuration.")
         
-        logger.info(f"\n✓ Completed sweep for {benchmark}")
-        logger.info(f"  Successful: {sum(1 for r in results if r['success'])}/{len(results)}")
+        successful = sum(1 for r in results if r['success'])
+        logger.info(f"\n✓ Completed configuration {config_id}")
+        logger.info(f"  Benchmarks run: {len(results)}")
+        logger.info(f"  Successful: {successful}")
+        logger.info(f"  Failed: {len(results) - successful}")
         
         return results
     
@@ -617,6 +723,17 @@ class SimulationRunner:
         """
         if benchmarks is None:
             benchmarks = self.config['benchmarks']['benchmark_list']
+        benchmarks = list(benchmarks)
+        
+        configurations = list(self.config_manager.generate_configurations(
+            strategy=strategy,
+            preset=preset,
+            num_samples=num_samples
+        ))
+        
+        if not configurations:
+            logger.warning("No configurations generated; nothing to run.")
+            return
         
         logger.info(f"\n{'='*60}")
         logger.info(f"FULL PARAMETER SWEEP")
@@ -625,26 +742,23 @@ class SimulationRunner:
         logger.info(f"Preset: {preset or 'None'}")
         logger.info(f"Benchmarks: {len(benchmarks)}")
         logger.info(f"Parallel: {parallel}")
+        logger.info(f"Configurations: {len(configurations)}")
         logger.info(f"{'='*60}\n")
         
-        all_results = []
-        
-        for benchmark in benchmarks:
-            results = self.run_benchmark_sweep(
-                benchmark=benchmark,
-                strategy=strategy,
-                preset=preset,
-                num_samples=num_samples,
-                parallel=parallel
+        for index, config in enumerate(configurations, start=1):
+            self._run_configuration_round(
+                config=config,
+                benchmarks=benchmarks,
+                parallel=parallel,
+                round_index=index,
+                total_rounds=len(configurations)
             )
-            all_results.extend(results)
             
-            # Backup after each benchmark (if enabled)
-            if self.config['google_drive'].get('backup_frequency') == 'after_each_benchmark':
-                self._backup_results(benchmark)
+            if self.config['google_drive'].get('backup_frequency') in {'after_each_benchmark', 'after_each_config'}:
+                self._backup_results(f"config_{self.config_manager.get_config_id(config)}")
         
-        # Save aggregate dataset
-        self._save_dataset(all_results)
+        # Finalize dataset artifacts
+        total_rows = self._finalize_dataset()
         
         # Final backup
         if self.gdrive_backup:
@@ -652,51 +766,37 @@ class SimulationRunner:
         
         logger.info(f"\n{'='*60}")
         logger.info(f"SWEEP COMPLETE")
-        logger.info(f"Total runs: {len(all_results)}")
-        logger.info(f"Successful: {sum(1 for r in all_results if r['success'])}")
-        logger.info(f"Failed: {sum(1 for r in all_results if not r['success'])}")
-        logger.info(f"Dataset saved to: {self.dataset_file}")
+        logger.info(f"Configurations processed: {len(configurations)}")
+        logger.info(f"New successful runs this session: {self.session_successful_runs}")
+        logger.info(f"New failed runs this session: {self.session_failed_runs}")
+        logger.info(f"Dataset rows (total): {total_rows}")
+        logger.info(f"Dataset CSV: {self.dataset_file}")
         logger.info(f"{'='*60}\n")
-    
-    def _save_dataset(self, results: List[Dict[str, Any]]):
-        """Save results as CSV dataset for ML training."""
-        if not results:
-            logger.warning("No results to save")
-            return
+
+    def _finalize_dataset(self) -> int:
+        """Create/upsert dataset.json and return total row count."""
+        if not self.dataset_file.exists():
+            logger.warning("dataset.csv not found; skipping dataset finalization")
+            return self.dataset_total_rows
         
-        # Flatten results into rows
-        rows = []
-        for result in results:
-            if not result['success'] or not result.get('metrics'):
-                continue
-            
-            row = {
-                'run_id': result['run_id'],
-                'benchmark': result['benchmark'],
-                'timestamp': result['timestamp'],
-                'duration': result['duration']
-            }
-            
-            # Add configuration parameters
-            for key, value in result['config'].items():
-                row[f'param_{key}'] = value
-            
-            # Add metrics
-            for key, value in result['metrics'].items():
-                row[f'metric_{key}'] = value
-            
-            rows.append(row)
+        try:
+            df = pd.read_csv(self.dataset_file)
+        except Exception as e:
+            logger.error(f"Failed to read dataset.csv for finalization: {e}")
+            return self.dataset_total_rows
         
-        # Save as CSV
-        df = pd.DataFrame(rows)
-        df.to_csv(self.dataset_file, index=False)
-        logger.info(f"✓ Saved dataset: {self.dataset_file} ({len(rows)} rows)")
-        
-        # Also save as JSON
+        total_rows = len(df)
         json_file = self.results_dir / 'dataset.json'
-        with open(json_file, 'w') as f:
-            json.dump(results, f, indent=2)
-        logger.info(f"✓ Saved JSON: {json_file}")
+        try:
+            df.to_json(json_file, orient='records', indent=2)
+            logger.info(f"✓ dataset.json updated with {total_rows} rows")
+        except Exception as e:
+            logger.error(f"Failed to write dataset.json: {e}")
+        
+        self.dataset_total_rows = total_rows
+        # Ensure dataset.csv sync is up to date after finalization
+        self._sync_dataset_to_drive()
+        return total_rows
     
     def _backup_results(self, label: str):
         """Backup results to Google Drive."""
