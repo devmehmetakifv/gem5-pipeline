@@ -1,0 +1,327 @@
+# Gem5 Simulation Pipeline Configuration
+#
+# IMPORTANT: Path Setup
+# =====================
+# - gem5.installation_path: Points to CLOUD MACHINE gem5 installation
+#   (where gem5.opt binary is located: /home/xenon/gem5Sim/gem5)
+#
+# - benchmarks.cpu2006_path: Points to LOCAL cpu2006 directory
+#   (in this project, use ./cpu2006 for relative path)
+#
+# The pipeline will:
+#   - Execute gem5.opt from cloud machine (build/X86/gem5.opt)
+#   - Use standard gem5 configs (configs/example/se.py)
+#   - Read benchmarks from local cpu2006/
+#   - Save results locally in results/
+
+# Gem5 Installation Paths
+gem5:
+  # Path to your main Gem5 installation on the cloud machine
+  # This is where gem5.opt binary and configs are located
+  installation_path: "/home/xenon/gem5Sim/gem5"
+  
+  # Relative path to the gem5 binary (on cloud machine)
+  binary: "build/X86/gem5.opt"
+  
+  # Directory containing simulation configs (on cloud machine)
+  # Use standard gem5 configs since tbtk doesn't exist
+  configs_dir: "configs/example"
+  
+  # Default config script to use (standard gem5 SE mode config)
+  default_config: "se.py"
+
+# SPEC CPU2006 Benchmarks
+benchmarks:
+  # Path to CPU2006 benchmark binaries (LOCAL - in this project)
+  # Use absolute path or relative to this config file
+  cpu2006_path: "./cpu2006"
+  
+  # List of benchmarks to run (all SPEC CPU2006)
+  benchmark_list:
+    - astar
+    - bwaves
+    - bzip2
+    - calculix
+    - gamess
+    - gems
+    - gobmk
+    - gromacs
+    - h264
+    - hmmer
+    - lbm
+    - leslie3d
+    - libquantum
+    - mcf
+    - milc
+    - namd
+    - omnetpp
+    - povray
+    - sjeng
+    - soplex
+    - tonto
+    - xalanc
+    - zeusmp
+  
+  # Benchmark input files (if needed, LOCAL - in this project)
+  input_dir: "./cpu2006/input"
+
+  # Command templates for each benchmark (override defaults as needed)
+  commands:
+    astar:
+      binary: "astar/astar"
+      options:
+        - "rivers.cfg"
+        - "rivers.bin"
+    bwaves:
+      binary: "bwaves/bwaves"
+      options:
+        - "bwaves.in"
+    bzip2:
+      binary: "bzip2/bzip2"
+      options:
+        - "input.source"
+        - "280"
+    calculix:
+      binary: "calculix/calculix"
+      options:
+        - "-i"
+        - "hyperviscoplastic"
+    gamess:
+      binary: "gamess/gamess"
+      stdin: "gamess/cytosine.2.config"
+    gems:
+      binary: "gems/gems"
+      stdin: "gems/ref.in"
+    gobmk:
+      binary: "gobmk/gobmk"
+      options:
+        - "--quiet"
+        - "--mode"
+        - "gtp"
+      stdin: "gobmk/13x13.tst"
+    gromacs:
+      binary: "gromacs/gromacs"
+      options:
+        - "-silent"
+        - "-deffnm"
+        - "gromacs"
+    h264:
+      binary: "h264/h264"
+      options:
+        - "-d"
+        - "foreman_ref_encoder_baseline.cfg"
+    hmmer:
+      binary: "hmmer/hmmer"
+      options:
+        - "nph3.hmm"
+        - "swiss41"
+    lbm:
+      binary: "lbm/lbm"
+      options:
+        - "3000"
+        - "reference.dat"
+        - "0"
+        - "0"
+        - "100_100_130_ldc.of"
+    leslie3d:
+      binary: "leslie3d/leslie3d"
+      options:
+        - "leslie3d.in"
+    libquantum:
+      binary: "libquantum/libquantum"
+      options:
+        - "1397"
+        - "8"
+    mcf:
+      binary: "mcf/mcf"
+      options:
+        - "inp.in"
+    milc:
+      binary: "milc/milc"
+      stdin: "milc/su3imp.in"
+    namd:
+      binary: "namd/namd"
+      options:
+        - "--input"
+        - "namd.input"
+        - "--iterations"
+        - "38"
+        - "--output"
+        - "namd.out"
+    omnetpp:
+      binary: "omnetpp/omnetpp"
+      options:
+        - "omnetpp.ini"
+    povray:
+      binary: "povray/povray"
+      options:
+        - "SPEC-benchmark-ref.ini"
+    sjeng:
+      binary: "sjeng/sjeng"
+      options:
+        - "ref.txt"
+    soplex:
+      binary: "soplex/soplex"
+      options:
+        - "-s1"
+        - "-e"
+        - "-m45000"
+        - "pds-50.mps"
+    tonto:
+      binary: "tonto/tonto"
+      stdin: "tonto/stdin"
+    xalanc:
+      binary: "xalanc/xalanc"
+      options:
+        - "t5.xml"
+        - "xalanc.xsl"
+    zeusmp:
+      binary: "zeusmp/zeusmp"
+
+# Output Configuration
+output:
+  # Where to store simulation results
+  results_dir: "./results"
+  
+  # Where to store temporary backups
+  backup_dir: "./backups"
+  
+  # Dataset output formats
+  formats:
+    - csv
+    - json
+  
+  # Keep individual run directories (true) or cleanup after aggregation (false)
+  keep_run_dirs: true
+  
+  # Compress old results
+  compress_old_results: true
+  compress_after_days: 7
+
+# Simulation Parameters
+simulation:
+  # Timeout for each simulation (seconds)
+  timeout_seconds: 7200  # 2 hours
+  
+  # Number of parallel simulations (adjust based on your machine)
+  max_parallel: 4
+  
+  # Retry failed simulations
+  retry_on_failure: true
+  max_retries: 2
+  
+  # Resume from interrupted runs
+  enable_resume: true
+  
+  # Checkpoint interval (for long-running sims)
+  checkpoint_interval: 1000000000  # ticks
+
+# Metrics to Extract from stats.txt
+metrics:
+  # Performance metrics
+  performance:
+    - sim_seconds
+    - sim_ticks
+    - sim_freq
+    - host_inst_rate
+    - host_op_rate
+    - sim_insts
+    - sim_ops
+  
+  # CPU metrics
+  cpu:
+    - numCycles
+    - cpi
+    - ipc
+    - committedInsts
+    - committedOps
+    - branches
+    - branchMispredicts
+  
+  # Cache metrics
+  cache:
+    - system.cpu.dcache.overall_hits::total
+    - system.cpu.dcache.overall_misses::total
+    - system.cpu.dcache.overall_miss_rate::total
+    - system.cpu.icache.overall_hits::total
+    - system.cpu.icache.overall_misses::total
+    - system.cpu.icache.overall_miss_rate::total
+    - system.l2.overall_hits::total
+    - system.l2.overall_misses::total
+    - system.l2.overall_miss_rate::total
+  
+  # Memory metrics
+  memory:
+    - system.mem_ctrls.readReqs
+    - system.mem_ctrls.writeReqs
+    - system.mem_ctrls.bytesReadSys
+    - system.mem_ctrls.bytesWrittenSys
+    - system.mem_ctrls.avgRdBW
+    - system.mem_ctrls.avgWrBW
+
+# Google Drive Backup Configuration
+google_drive:
+  # Enable/disable Google Drive backup
+  enabled: true
+  
+  # Path to OAuth credentials file (from Google Cloud Console)
+  credentials_file: "credentials.json"
+  
+  # Token file (generated after first authentication)
+  token_file: "token.json"
+  
+  # Google Drive folder ID where backups will be stored
+  # You can get this from the URL when you open the folder in Drive
+  folder_id: ""  # Leave empty to create in root, or specify folder ID
+  
+  # Backup frequency
+  backup_frequency: "after_each_benchmark"  # Options: after_each_run, after_each_benchmark, daily, manual
+  
+  # Compress before upload
+  compress_before_upload: true
+  
+  # Delete local backup after successful upload
+  delete_local_after_upload: false
+  
+  # Retry configuration
+  max_retries: 3
+  retry_delay_seconds: 60
+
+# Logging Configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Log file location
+  file: "logs/simulation_pipeline.log"
+  
+  # Console output
+  console: true
+  
+  # Detailed progress bars
+  progress_bars: true
+  
+  # Save simulation stdout/stderr
+  save_simulation_logs: true
+
+# Advanced Options
+advanced:
+  # Validate gem5 configuration before running
+  validate_config: true
+  
+  # Dry run (don't actually execute simulations)
+  dry_run: false
+  
+  # Email notifications (optional)
+  email_notifications:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    from_email: "your-email@gmail.com"
+    to_email: "recipient@example.com"
+    password: ""  # Use app-specific password
+  
+  # Resource monitoring
+  monitor_resources: true
+  min_free_disk_gb: 50
+  max_memory_percent: 80

@@ -1,0 +1,46 @@
+Redirecting Options
+  All Streams to console..........On   and file SPEC-benchmark.log
+  Debug Stream to console.........Off
+  Fatal Stream to console.........On 
+  Render Stream to console........On 
+  Statistics Stream to console....On 
+  Warning Stream to console.......Off
+Parsing Options
+  Input file: SPEC-benchmark-ref.pov (compatible to version 3.50)
+  Remove bounds........Off
+  Split unions.........Off
+  Library paths:
+Output Options
+  Image resolution 1280 by 1024 (rows 1 to 1024, columns 1 to 1280).
+  Graphic display......Off
+  Mosaic preview.......Off
+  CPU usage histogram..Off
+  Continued trace......Off
+Tracing Options
+  Quality:  9
+  Bounding boxes.......On   Bounding threshold: 1
+  Light Buffer.........On 
+  Vista Buffer.........On   Draw Vista Buffer....Off
+  Antialiasing.........On  (Method 1, Threshold 0.300, Depth 3, Jitter Off)
+  Clock value:    0.000  (Animation off)
+
+High Quality focal blur used...
+Cleanup Parse Warning: Focal blur is used. Standard antialiasing is switched
+ off.
+Scene Statistics
+  Finite objects:          190
+  Infinite objects:         10
+  Light sources:             1
+  Total:                   201
+Render Statistics (Partial Image Rendered)
+Image Resolution 1280 x 1024
+----------------------------------------------------------------------------
+Pixels:                0   Samples:               0
+Rays:                  0   Saved:                 0   Max Level: 0/5
+----------------------------------------------------------------------------
+Ray->Shape Intersection          Tests       Succeeded
+----------------------------------------------------------------------------
+----------------------------------------------------------------------------
+Calls to Noise:                   0   Calls to DNoise:              10
+----------------------------------------------------------------------------
+----------------------------------------------------------------------------

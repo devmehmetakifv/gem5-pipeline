@@ -1,0 +1,179 @@
+{
+  "description": "Configuration space for Gem5 simulation parameter sweep",
+  "version": "1.0",
+  "constraints": {
+    "architecture": "X86",
+    "cpu_type_per_sweep": "single",
+    "description": "X86 only, CPU type stays same within each sweep"
+  },
+  
+  "cpu": {
+    "cpu_type": {
+      "values": ["AtomicSimpleCPU", "TimingSimpleCPU", "MinorCPU", "DerivO3CPU"],
+      "description": "CPU model type",
+      "default": "DerivO3CPU"
+    },
+    "cpu_clock": {
+      "values": ["1GHz", "2GHz", "4GHz", "8GHz"],
+      "description": "CPU clock frequency",
+      "default": "2GHz"
+    }
+  },
+  
+  "memory": {
+    "mem_size": {
+      "values": ["2048MB", "4096MB", "8192MB"],
+      "description": "Total system memory",
+      "default": "4096MB"
+    },
+    "mem_type": {
+      "values": ["DDR3_1600_8x8", "DDR4_2400_8x8"],
+      "description": "Memory type",
+      "default": "DDR3_1600_8x8"
+    }
+  },
+  
+  "cache_l1d": {
+    "size": {
+      "values": ["16kB", "32kB", "64kB"],
+      "description": "L1 data cache size",
+      "default": "32kB"
+    },
+    "assoc": {
+      "values": [2, 4, 8],
+      "description": "L1 data cache associativity",
+      "default": 4
+    }
+  },
+  
+  "cache_l1i": {
+    "size": {
+      "values": ["16kB", "32kB", "64kB"],
+      "description": "L1 instruction cache size",
+      "default": "32kB"
+    },
+    "assoc": {
+      "values": [2, 4, 8],
+      "description": "L1 instruction cache associativity",
+      "default": 4
+    }
+  },
+  
+  "cache_l2": {
+    "enabled": {
+      "values": [true],
+      "description": "Enable L2 cache",
+      "default": true
+    },
+    "size": {
+      "values": ["128kB", "256kB", "512kB", "1MB"],
+      "description": "L2 cache size",
+      "default": "256kB"
+    },
+    "assoc": {
+      "values": [4, 8, 16],
+      "description": "L2 cache associativity",
+      "default": 8
+    }
+  },
+  
+  "cache_l3": {
+    "enabled": {
+      "values": [false, true],
+      "description": "Enable L3 cache",
+      "default": false
+    },
+    "size": {
+      "values": ["1MB", "2MB", "4MB", "8MB"],
+      "description": "L3 cache size (if enabled)",
+      "default": "2MB"
+    },
+    "assoc": {
+      "values": [8, 16],
+      "description": "L3 cache associativity",
+      "default": 16
+    }
+  },
+  
+  "system": {
+    "sys_clock": {
+      "values": ["1GHz", "2GHz"],
+      "description": "System clock frequency",
+      "default": "1GHz"
+    }
+  },
+  
+  "simulation": {
+    "fast_forward": {
+      "values": [100000000],
+      "description": "Instructions to fast-forward before detailed simulation (LOCKED)",
+      "default": 100000000,
+      "locked": true
+    },
+    "max_insts": {
+      "values": [100000000],
+      "description": "Maximum instructions to simulate in detail (LOCKED)",
+      "default": 100000000,
+      "locked": true
+    }
+  },
+  
+  "sampling_strategy": {
+    "type": "grid",
+    "options": {
+      "grid": {
+        "description": "Full factorial design - all combinations",
+        "exhaustive": true
+      },
+      "random": {
+        "description": "Random sampling from parameter space",
+        "num_samples": 1000,
+        "seed": 42
+      },
+      "latin_hypercube": {
+        "description": "Latin Hypercube Sampling for better coverage",
+        "num_samples": 500,
+        "seed": 42
+      },
+      "custom": {
+        "description": "Custom configuration list",
+        "config_file": "custom_configs.json"
+      }
+    }
+  },
+  
+  "presets": {
+    "small_test": {
+      "description": "Quick test configuration - single CPU type per run",
+      "overrides": {
+        "cpu.cpu_type": ["TimingSimpleCPU"],
+        "cpu.cpu_clock": ["2GHz"],
+        "memory.mem_size": ["2048MB"]
+      }
+    },
+    "baseline": {
+      "description": "Standard baseline configuration",
+      "overrides": {
+        "cpu.cpu_type": ["DerivO3CPU"],
+        "cpu.cpu_clock": ["2GHz"],
+        "memory.mem_size": ["4096MB"],
+        "cache_l1d.size": ["32kB"],
+        "cache_l1i.size": ["32kB"],
+        "cache_l2.size": ["256kB"]
+      }
+    },
+    "high_performance": {
+      "description": "High-end configuration",
+      "overrides": {
+        "cpu.cpu_type": ["DerivO3CPU"],
+        "cpu.cpu_clock": ["8GHz"],
+        "memory.mem_size": ["8192MB"],
+        "cache_l1d.size": ["64kB"],
+        "cache_l1i.size": ["64kB"],
+        "cache_l2.size": ["1MB"],
+        "cache_l3.enabled": [true],
+        "cache_l3.size": ["8MB"]
+      }
+    }
+  }
+}
